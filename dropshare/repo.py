@@ -39,7 +39,7 @@ class Repo(object):
 
     def __init__(self):
         if not os.path.exists(self._repository):
-            tools.Console.write(f' \u2717 non existent directory {self._repository}\n')
+            tools.Console.write(f' \u2717 non existent directory {self._repository}.\n')
             sys.exit(0)
         self.toplevel_dir = self._repository
         if not os.path.exists(os.path.join(self.toplevel_dir, '.git')):
@@ -85,11 +85,11 @@ class Repo(object):
                     self.ds_notes("append", 'HEAD', '--message', f'dropshare initialisation')
                     self.git.push(remote, Repo.DS_REF_NOTES)
                 elif 'read only' in exc.stderr:
-                    tools.Console.write(' \u2717 push ds notes error: git repository read only\n')
+                    tools.Console.write(' \u2717 push ds notes error: git repository read only.\n')
         tools.Console.write('done\n')
 
     def ds_pull_notes(self, remote='origin', initial=False):
-        tools.Console.write(f" * pull ds notes from {remote}... ")
+        tools.Console.write(f" * pull ds notes from {remote}...")
         try:
             if initial:
                 self.git.fetch("origin", f"{Repo.DS_REF_NOTES}:{Repo.DS_REF_NOTES}")

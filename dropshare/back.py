@@ -57,8 +57,6 @@ class Backend(repo.Repo):
         tools.Console.write(f"  (0) NEW ACCOUNT\n")
         while selected != '0' and selected not in choices.keys():
             selected = input("Enter your choice here: ")
-            print(type(selected), selected, selected in choices.keys())
-
         if selected in choices.keys():
             dic = choices[selected]
         else:

@@ -58,7 +58,7 @@ class Dropshare(back.Backend):
                             self.ds_append_note(sha, "pull", *stub)
                             self.git.add(fname)
                         else:
-                            tools.Console.write(f' \u2717 fails to upload {fname}.\n')
+                            tools.Console.write(f' \u2717 fails to download {fname}.\n')
 
     def ds_push(self):
         with self._dropshare_notes():
@@ -66,7 +66,7 @@ class Dropshare(back.Backend):
                 if not self.ds_has_note(sha, fname, *stub):
                     with open(fname, 'rb') as in_stream:
                         if not self.data_push(in_stream, *stub):
-                            tools.Console.write(f' \u2713 file {fname} already in store\n')
+                            tools.Console.write(f' \u2713 file {fname} already in store.\n')
                     self.ds_append_note(sha, "push", *stub)
 
     def ds_filter_clean(self):
@@ -96,10 +96,10 @@ class Dropshare(back.Backend):
     def ds_init(self):
         if not self.store or self._force:
             self.set_credentials()
-            if not self.store:
-                tools.Console.write('failed to access storage; token invalid?\n')
-                sys.exit(1)
-        if self.store:
+        if not self.store:
+            tools.Console.write('failed to access storage; token invalid?\n')
+            sys.exit(1)
+        else:
             self.ds_install()
             self.ds_delta()
 
@@ -126,14 +126,14 @@ class Dropshare(back.Backend):
     def ds_delta(self):
         changed, deleted, inserted = self.dbx.delta()
         if changed:
-            tools.Console.write(f' * {len(deleted)} deleted, {len(inserted)} updated\n')
+            tools.Console.write(f' * {len(deleted)} deleted, {len(inserted)} updated.\n')
         else:
             tools.Console.write(f' * delta() returns no changes.\n')
 
     def ds_log(self):
         for fname in self._paths:
             if not os.path.exists(fname):
-                tools.Console.write(f' \u2717 file {fname} does not exist\n')
+                tools.Console.write(f' \u2717 file {fname} does not exist.\n')
                 return
             entries = []
             for tree in self.git.log("--pretty=format:%T", fname).split('\n'):
@@ -145,7 +145,7 @@ class Dropshare(back.Backend):
                         entries.append((dt_local, sha[:6], dt_fmt, arrow, user))
             sentries = sorted(entries, key=operator.itemgetter(0), reverse=True)
             for _, sha, date, arrow, user in sentries:
-                tools.Console.write(f" {arrow} ({sha}) {date} by {user}\n")
+                tools.Console.write(f" {arrow} ({sha}) {date} by {user}.\n")
 
     def ds_show(self):
         from subprocess import call
