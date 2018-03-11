@@ -154,7 +154,7 @@ class Repo(object):
     def list_credentials(self):
         accounts = dict()
         for line in self.git.config('--global', '--list').split('\n'):
-            match = Backend.DS_RE.match(line)
+            match = Repo.DS_RE.match(line)
             if match:
                 tag = match.group(1).strip()
                 key = match.group(2).strip()
