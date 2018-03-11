@@ -13,9 +13,9 @@ import operator
 import tempfile
 from contextlib import contextmanager
 
-from . import tools, drop
+from . import tools, back
 
-class Dropshare(drop.Backend):
+class Dropshare(back.Backend):
 
     store = False
     # calls args
@@ -39,7 +39,7 @@ class Dropshare(drop.Backend):
         self.ds_delta()
         try:
             yield
-        except drop.BackendException as exc:
+        except back.BackendException as exc:
             tools.Console.write(exc.message)
             sys.exit(1)
         finally:
