@@ -9,45 +9,58 @@
 
 import sys
 import argparse
+from contextlib import contextmanager
 
 from . import front
 
-def main():
-    parser = argparse.ArgumentParser(prog='git-dropshare')
-    parser.add_argument('-C', dest='_repository', action='store', default='.', help='git working repository')
+class Parser:
+    def __init__(self):
+        self.parser = argparse.ArgumentParser(prog='git-dropshare')
+        self.parser.add_argument('-C', dest='_repository', metavar="REPOSITORY",
+                                 action='store', default='.',
+                                 help='git working repository')
+        self.subparser = self.parser.add_subparsers()
 
-    subparsers = parser.add_subparsers()
-    subparsers.add_parser('init', help='initialize a repository to use dropshare') \
-              .add_argument('-f', dest='_force', action='store_true', help='force initialization procedure') \
-              .set_defaults(call=front.Dropshare.ds_init)
-    subparsers.add_parser('check', help='check dropshare configuration') \
-              .set_defaults(call=front.Dropshare.ds_check)
-    subparsers.add_parser('track', help='add pattern to set of tracked files') \
-              .add_argument('_match', nargs='+', metavar='pattern', help='file pattern') \
-              .set_defaults(call=front.Dropshare.ds_track)
-    subparsers.add_parser('push', help='upload tracked files to Dropbox shared folder') \
-              .add_argument('_match', nargs='*', metavar='pattern', help='limit push by pattern(s)') \
-              .set_defaults(call=front.Dropshare.ds_push)
-    subparsers.add_parser('pull', help='download tracked files from Dropbox shared folder') \
-              .add_argument('_match', nargs='*', metavar='pattern', help='limit pull by pattern(s)') \
-              .set_defaults(call=front.Dropshare.ds_pull)
-    subparsers.add_parser('fetch', help='fetch and merge notes from a remote repository') \
-              .add_argument('_remote', nargs=1, metavar='remote', help='fetch dropshare notes from remote') \
-              .set_defaults(call=front.Dropshare.ds_fetch)
-    subparsers.add_parser('filter-clean', help='clean stdin stream ') \
-              .add_argument('-f', dest='_filename', action='store', metavar='path', default='stdin') \
-              .set_defaults(call=front.Dropshare.ds_filter_clean)
-    subparsers.add_parser('filter-smudge', help='smudge sdin stream') \
-              .add_argument('-f', dest='_filename', action='store', metavar='path', default='stdin') \
-              .set_defaults(call=front.Dropshare.ds_filter_smudge)
-    subparsers.add_parser('delta', help='index dropshare storage area') \
-              .set_defaults(call=front.Dropshare.ds_delta)
-    subparsers.add_parser('log', help='dump history from dropshare notes') \
-              .add_argument('_paths', nargs='+', metavar='filenames') \
-              .set_defaults(call=front.Dropshare.ds_log)
+    @contextmanager
+    def action(self, *args, **kwargs):
+            try:
+                yield self.subparser.add_parser(*args, **kwargs)
+            finally:
+                pass
+
+def main():
+    p = Parser()
+    with p.action('init', help='initialize a repository to use dropshare') as cmd:
+        cmd.add_argument('-f', dest='_force', action='store_true', help='force initialisation procedure')
+        cmd.set_defaults(call=front.Dropshare.ds_init)
+    with p.action('check', help='check dropshare configuration') as cmd:
+        cmd.set_defaults(call=front.Dropshare.ds_check)
+    with p.action('track', help='add pattern to set of tracked files') as cmd:
+        cmd.add_argument('_match', nargs='+', metavar='PATTERN', help='file pattern')
+        cmd.set_defaults(call=front.Dropshare.ds_track)
+    with p.action('push', help='upload tracked files to Dropbox shared folder') as cmd:
+        cmd.add_argument('_match', nargs='*', metavar='PATTERN', help='limit push by pattern(s)')
+        cmd.set_defaults(call=front.Dropshare.ds_push)
+    with p.action('pull', help='download tracked files from Dropbox shared folder') as cmd:
+        cmd.add_argument('_match', nargs='*', metavar='PATTERN', help='limit pull by pattern(s)')
+        cmd.set_defaults(call=front.Dropshare.ds_pull)
+    with p.action('fetch', help='fetch and merge notes from a remote repository') as cmd:
+        cmd.add_argument('_remote', nargs=1, metavar='REMOTE', help='fetch dropshare notes from remote')
+        cmd.set_defaults(call=front.Dropshare.ds_fetch)
+    with p.action('filter-clean', help='clean stdin stream ') as cmd:
+        cmd.add_argument('-f', dest='_filename', action='store', metavar='PATH', default='stdin')
+        cmd.set_defaults(call=front.Dropshare.ds_filter_clean)
+    with p.action('filter-smudge', help='smudge sdin stream') as cmd:
+        cmd.add_argument('-f', dest='_filename', action='store', metavar='PATH', default='stdin')
+        cmd.set_defaults(call=front.Dropshare.ds_filter_smudge)
+    with p.action('delta', help='index dropshare storage area') as cmd:
+        cmd.set_defaults(call=front.Dropshare.ds_delta)
+    with p.action('log', help='dump history from dropshare notes') as cmd:
+        cmd.add_argument('_paths', nargs='+', metavar='FILES')
+        cmd.set_defaults(call=front.Dropshare.ds_log)
 
     try:
-        _ = parser.parse_args(namespace=front.Dropshare)
+        _ = p.parser.parse_args(namespace=front.Dropshare)
     except argparse.ArgumentError:
         parser.print_help()
         sys.exit(1)
