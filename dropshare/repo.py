@@ -70,6 +70,8 @@ class Repo(object):
         except GitCommandError:
             return default
 
+    # Dropshare specific
+
     def ds_stub(self, sha):
         return tools.ds_stub_string(self.git.show(sha))
 
@@ -147,6 +149,21 @@ class Repo(object):
         self.ds_pull_notes(initial=True)
         for val in ('clean', 'smudge'):
             self.git_config(f"filter.dropshare.{val}", f"git-ds filter-{val} -f %f")
+
+    DS_RE = re.compile(r'^dropshare\.([^.]+).([^.]+)=(.*)$')
+    def list_credentials(self):
+        accounts = dict()
+        for line in self.git.config('--global', '--list').split('\n'):
+            match = Backend.DS_RE.match(line)
+            if match:
+                tag = match.group(1).strip()
+                key = match.group(2).strip()
+                val = match.group(3).strip() if match.group(3) else None
+                if tag not in accounts:
+                    accounts[tag] = {'description': 'No description provided',
+                                     'token': None, 'root_path': None}
+                accounts[tag][key] = val
+        return accounts
 
     def ds_add_pattern(self, pattern, path=None):
         if path is None:

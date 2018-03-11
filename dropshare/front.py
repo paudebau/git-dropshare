@@ -26,7 +26,7 @@ class Dropshare(drop.Backend):
     _paths = []
 
     def __init__(self):
-        super(Dropshare, self).__init__()
+        super().__init__()
         if not self.store:
             tools.Console.write('Dropshare not operational. Leaving...\n')
             sys.exit(1)
@@ -141,11 +141,11 @@ class Dropshare(drop.Backend):
                     for timestamp, direction, _, _, user in self.ds_manifest(sha, reverse=True):
                         dt_local = tools.local_date(timestamp)
                         dt_fmt = dt_local.strftime("%A %d %B %Y, %X")
-                        entries.append((dt_local, sha[:6], dt_fmt, direction, user))
-                    break
-            sorted_entries = sorted(entries, key=operator.itemgetter(0), reverse=True)
-            for _, sha, date, direction, user in sorted_entries:
-                tools.Console.write(f" + ({sha}) {date} {direction} {user}\n")
+                        arrow = '\u2190' if direction == 'push' else '\u2192'
+                        entries.append((dt_local, sha[:6], dt_fmt, arrow, user))
+            sentries = sorted(entries, key=operator.itemgetter(0), reverse=True)
+            for _, sha, date, arrow, user in sentries:
+                tools.Console.write(f" {arrow} ({sha}) {date} by {user}\n")
 
     def ds_show(self):
         from subprocess import call
