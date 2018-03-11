@@ -28,9 +28,10 @@ For example:
 
     git ds track '*.pdf'
 
-adds the line `*.pdf filter=dropshare` to .gitattributes, not already present.
+adds the line `*.pdf filter=dropshare` to .gitattributes, if not already present.
 
 **N.B.** In case this is a team development, **everybody** must agree on the content of the file `.gitattributes`!
+
 **N.B.** If sharing is considered, be warned this is incompatible with Dropbox *Applications* model.
 
 ## Typical use
@@ -51,6 +52,6 @@ Notice, there is NO requirement, as far as Git is concerned, to pull files outsi
 If `git ds pull` is not trggered, every filtered files will be seen as a *stub* which content is:
 
     dropshare
-    file path # merely for information
+    file path # merely for information purpose
     hexdigest # hash content, using Dropbox algorithm
 
