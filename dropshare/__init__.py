@@ -21,6 +21,9 @@ class Parser:
                                  help='git working repository')
         self.subparser = self.parser.add_subparsers()
 
+    def help(self):
+        self.parser.print_help()
+
     @contextmanager
     def action(self, *args, **kwargs):
             try:
@@ -36,7 +39,7 @@ def main():
     with p.action('check', help='check dropshare configuration') as cmd:
         cmd.set_defaults(call=front.Dropshare.ds_check)
     with p.action('track', help='add pattern to set of tracked files') as cmd:
-        cmd.add_argument('_match', nargs='+', metavar='PATTERN', help='file pattern')
+        cmd.add_argument('_match', nargs=1, metavar='PATTERN', help='file pattern')
         cmd.set_defaults(call=front.Dropshare.ds_track)
     with p.action('push', help='upload tracked files to Dropbox shared folder') as cmd:
         cmd.add_argument('_match', nargs='*', metavar='PATTERN', help='limit push by pattern(s)')
@@ -62,11 +65,11 @@ def main():
     try:
         _ = p.parser.parse_args(namespace=front.Dropshare)
     except argparse.ArgumentError:
-        parser.print_help()
+        p.help()
         sys.exit(1)
 
     app = front.Dropshare()
     if hasattr(app, 'call'):
         sys.exit(app.call())
     else:
-        parser.print_help()
+        p.help()
