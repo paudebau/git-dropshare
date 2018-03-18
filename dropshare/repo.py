@@ -10,13 +10,11 @@
 import os
 import sys
 import re
-# import itertools
 import time
-
-import git
-from git.exc import GitCommandError
+from typing import List, Optional, Union, Tuple, Iterable, Match, Dict
 
 from . import tools
+from .git import Git, GitCommandError, GitCmd, Sha
 
 class Repo(object):
 
@@ -24,13 +22,12 @@ class Repo(object):
     DS_FILT = re.compile(r'^([^\s]*)\s+filter=dropshare\s*$')
     DS_REF_NOTES = 'refs/notes/dropshare'
 
-    __instance = None
-    _repository = '.' # repository location
-
-    git = None
+    __instance = None # type: Optional[Repo]
+    _repository = '.' # type: str # repository location
     toplevel_dir = '.'
-    git_directory = '.git'
-    config_filename = None
+
+    git = None # type: Optional[GitCmd]
+    git_directory = '.git' # may be redirected via gitdir
 
     def __new__(cls):
         if Repo.__instance is None:
@@ -39,16 +36,16 @@ class Repo(object):
 
     def __init__(self):
         if not os.path.exists(self._repository):
-            tools.Console.write(f' \u2717 non existent directory {self._repository}.\n')
+            tools.Console.info(f' \u2717 non existent directory {self._repository}.')
             sys.exit(0)
         self.toplevel_dir = self._repository
         if not os.path.exists(os.path.join(self.toplevel_dir, '.git')):
-            tools.Console.write(' \u2717 git: no repository found; run git init?\n')
+            tools.Console.info(' \u2717 git: no repository found; run git init?')
             sys.exit(1)
-        self.git = git.Git(self.toplevel_dir)
+        self.git = Git(self.toplevel_dir)
         self.git_directory = self.git.rev_parse(git_dir=True)
-        self.config_filename = os.path.join(self.toplevel_dir, '.dropshare')
-        os.makedirs(os.path.join(self.git_directory, 'dropshare'), exist_ok=True)
+        self.obj_directory = os.path.join(self.git_directory, 'dropshare', 'objects')
+        os.makedirs(self.obj_directory, exist_ok=True)
 
     # Git calls
     def git_ls_tree(self, *args, **kwargs):
@@ -58,13 +55,13 @@ class Repo(object):
                 _, _, sha = meta.split(' ')
                 yield (fname, sha)
 
-    def git_identity(self):
+    def git_identity(self) -> Tuple[str, str]:
         try:
             return (self.git.config("user.name"), self.git.config("user.email"))
         except:
             return ('Anonymous', 'somebody@from.somewhere.else')
 
-    def git_config(self, *args, default=None, **kwargs):
+    def git_config(self, *args, default : Optional[str] = None, **kwargs) -> Optional[str]:
         try:
             return self.git.config(*args, **kwargs)
         except GitCommandError:
@@ -72,11 +69,11 @@ class Repo(object):
 
     # Dropshare specific
 
-    def ds_stub(self, sha):
+    def ds_stub(self, sha : Sha) -> Optional[Tuple[str, str]]:
         return tools.ds_stub_string(self.git.show(sha))
 
     def ds_push_notes(self, remote='origin'):
-        tools.Console.write(f" * push ds notes to {remote}... ")
+        # tools.Console.info(f' * push ds notes to {remote}... ')
         try:
             self.git.push(remote, Repo.DS_REF_NOTES)
         except GitCommandError as exc:
@@ -85,11 +82,11 @@ class Repo(object):
                     self.ds_notes("append", 'HEAD', '--message', f'dropshare initialisation')
                     self.git.push(remote, Repo.DS_REF_NOTES)
                 elif 'read only' in exc.stderr:
-                    tools.Console.write(' \u2717 push ds notes error: git repository read only.\n')
-        tools.Console.write('done\n')
+                    tools.Console.warning(' \u2717 push ds notes error: git repository read only.')
+        # tools.Console.info('done')
 
     def ds_pull_notes(self, remote='origin', initial=False):
-        tools.Console.write(f" * pull ds notes from {remote}...")
+        # tools.Console.info(f' * pull ds notes from {remote}...')
         try:
             if initial:
                 self.git.fetch("origin", f"{Repo.DS_REF_NOTES}:{Repo.DS_REF_NOTES}")
@@ -99,32 +96,30 @@ class Repo(object):
             pass
         else:
             self.ds_notes("merge", '--strategy', 'cat_sort_uniq', f"{Repo.DS_REF_NOTES}-{remote}")
-        tools.Console.write("done\n")
+        # tools.Console.info('done')
 
-    def ds_notes(self, *args, **kwargs):
-        return self.git.notes('--ref=dropshare', *args, **kwargs)
+    def ds_notes(self, *args) -> str:
+        return self.git.notes('--ref=dropshare', *args)
 
-    def ds_append_note(self, sha, direction, hexdigest, fname):
+    def ds_append_note(self, sha : Sha, direction : str, hexdigest : str, fname : str):
         user, _ = self.git_identity()
         self.ds_notes("append", sha, '--message', f'{time.time()}\t{direction}\t{hexdigest}\t{fname}\t{user}')
 
-    def ds_manifest(self, sha, reverse=False):
+    def ds_manifest(self, sha: Sha, reverse=False) -> Iterable[List[str]]:
         try:
-            notes = self.ds_notes('show', sha)
+            notes = self.ds_notes('show', sha)  # type: str
         except GitCommandError:
             yield from []
         else:
-            if notes:
-                notes = [x for x in notes.strip().split('\n') if x.strip()]
-                if reverse:
-                    notes.reverse()
-                # returns (timestamp, direction, hexdigest, path, user) tuples
-                yield from [x.split('\t') for x in notes]
-            else:
+            if not notes:
                 yield from []
+            lnotes = [x for x in notes.strip().split('\n') if x.strip()] # type: List[str]
+            if reverse:
+                lnotes.reverse()
+            yield from [x.split('\t') for x in lnotes]
 
-    def ds_has_note(self, sha, fname, hexdigest, path):
-        manifest = list(self.ds_manifest(sha, reverse=True))
+    def ds_has_note(self, sha : Sha, fname : str, hexdigest : str, path : str) -> bool:
+        manifest = self.ds_manifest(sha, reverse=True)
         for _, direction, hexdigest_, path_, _ in manifest:
             if direction == 'push' and hexdigest == hexdigest_:
                 return True
@@ -139,7 +134,7 @@ class Repo(object):
     def ds_ready(self):
         try:
             if not self.check_filters():
-                tools.Console.write(' \u2717 git-ds: not initialised; run git-ds init.\n')
+                tools.Console.info(' \u2717 git-ds: not initialised; run git-ds init.')
                 sys.exit(1)
         except GitCommandError:
             pass
@@ -151,9 +146,9 @@ class Repo(object):
             self.git_config(f"filter.dropshare.{val}", f"git-ds filter-{val} -f %f")
 
     DS_RE = re.compile(r'^dropshare\.([^.]+).([^.]+)=(.*)$')
-    def list_credentials(self):
-        accounts = dict()
-        for line in self.git.config('--global', '--list').split('\n'):
+    def list_credentials(self) -> Dict[str, Dict[str, str]]:
+        accounts = dict() # type: Dict[str, Dict[str, str]]
+        for line in self.git.config('--global', '--list').split(''):
             match = Repo.DS_RE.match(line)
             if match:
                 tag = match.group(1).strip()
@@ -165,25 +160,30 @@ class Repo(object):
                 accounts[tag][key] = val
         return accounts
 
-    def ds_add_pattern(self, pattern, path=None):
+    def ds_add_pattern(self, patterns : List[str], path : Optional[str] = None):
+        pattern = patterns[0]
+        if not pattern:
+            tools.Console.info(f' \u2717 empty pattern {pattern}?')
+            return
         if path is None:
             path = Repo.ATTR_LOCS[0]
         if not os.path.exists(path):
-            tools.Console.write(f' \u2717 path {path} not found.\n')
+            tools.Console.info(f' \u2717 path {path} not found.')
             return
+        attributes = open(path, 'rt').readlines()
+        for line in attributes:
+            if not line.startswith('#'):
+                match = Repo.DS_FILT.match(line)
+                if match and match.group(1) == pattern:
+                    tools.Console.info(f' \u2713 pattern "{pattern}" already tracked.')
+                    break
+        else:
+            attributes.append(f'{pattern} filter=dropshare')
+            with open(path, "w+t") as attr_stream:
+                attr_stream.write('\n'.join(attributes))
+            tools.Console.info(f' \u2713 pattern {pattern} is now tracked.')
 
-        with open(path, "w+t") as attr_stream:
-            for line in attr_stream.readlines():
-                if not line.startswith('#'):
-                    match = Repo.DS_FILT.match(line)
-                    if match and match.group(1) == pattern:
-                        tools.Console.write(f' \u2713 pattern {pattern} already tracked.\n')
-                        break
-            else:
-                attr_stream.write(f'{pattern} filter=dropshare\n')
-                tools.Console.write(f' \u2713 pattern {pattern} is now tracked.\n')
-
-    def _ds_patterns(self, paths):
+    def _ds_patterns(self, paths : List[str]):
         for path in [os.path.join(self.toplevel_dir, x) for x in paths]:
             if os.path.exists(path):
                 for line in open(path, "r+t").readlines():
@@ -194,11 +194,11 @@ class Repo(object):
                             if regex:
                                 yield regex
 
-    def filtered_by_attributes(self, match=[]):
+    def filtered_by_attributes(self, match : List[str] = []) -> Iterable[Tuple[str, str, str]]:
         patterns = list(self._ds_patterns(Repo.ATTR_LOCS))
         selected = re.compile('|'.join(filter(None.__ne__, map(tools.fnmatch_normalize, match))))
         if not patterns:
-            tools.Console.write(" \u2717 Found no dropshare rules...\n")
+            tools.Console.info(' \u2717 Found no dropshare rules...')
             yield from []
         pat_re = re.compile('|'.join(patterns))
         items = self.git_ls_tree('HEAD', r=True)
@@ -207,4 +207,31 @@ class Repo(object):
                 if not match or selected.match(fname):
                     stub = self.ds_stub(sha)
                     if stub:
-                        yield (sha, fname, stub)
+                        yield (sha, fname, stub[0])
+
+    # Dropshare staging management
+
+    def ds_staging_objects(self):
+        return set(os.listdir(self.obj_directory))
+
+    def ds_garbage_collector(self):
+        for fname in self.ds_staging_objects():
+            if self.data_exists(fname):
+                os.unlink(os.path.join(self.obj_directory, fname))
+
+    def ds_referenced_objects(self, full=True) -> Union[Iterable[Tuple[str, str]], Iterable[str]]:
+        for line in self.git.rev_list(objects=True, all=True).split():
+            try:
+                sha = line[:40]
+                _, obj_type, size = self.git.get_object_header(sha)
+                if obj_type != b'blob' or int(size) >= 250: # fixme tools.ds_stub max size
+                    continue
+            except  ValueError:
+                pass
+            else:
+                try:
+                    hexdigest, path = tools.ds_stub_string(self.git.show(sha))
+                except:
+                    pass
+                else:
+                    yield (hexdigest, path) if full else hexdigest

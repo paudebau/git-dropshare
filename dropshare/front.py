@@ -9,9 +9,10 @@
 
 import os
 import sys
+import shutil
 import operator
-import tempfile
 from contextlib import contextmanager
+from typing import List, Optional
 
 from . import tools, back
 
@@ -19,17 +20,20 @@ class Dropshare(back.Backend):
 
     store = False
     # calls args
-    _force = None     # init
-    _match = []       # pull/push
-    _remote = None    # fetch
-    _filename = None  # log
-    _paths = []
+    _force = None     # type: Optional[bool] # init
+    _match = []       # type: List[str] # pull/push
+    _remote = None    # type: Optional[str] # fetch
+    _filename = None  # type: Optional[str] # log
+    _paths = []       # type: List[str]
 
     def __init__(self):
         super().__init__()
         if not self.store:
-            tools.Console.write('Dropshare not operational. Leaving...\n')
-            sys.exit(1)
+            tools.Console.warning('Dropshare not operational. Leaving...')
+            #sys.exit(1)
+
+    def call(self):
+        pass
 
     @contextmanager
     def _dropshare_notes(self):
@@ -40,7 +44,7 @@ class Dropshare(back.Backend):
         try:
             yield
         except back.BackendException as exc:
-            tools.Console.write(exc.message)
+            tools.Console.error(exc.message)
             sys.exit(1)
         finally:
             self.ds_push_notes()
@@ -49,55 +53,83 @@ class Dropshare(back.Backend):
         with self._dropshare_notes():
             self.ds_pull_notes(self._remote)
 
+    def _orphan_files(self):
+        for path in self.git.ls_files(self.toplevel_dir).split('\n'):
+            stub = tools.ds_stub_file(path)
+            if stub:
+                yield stub
+
+    def _checkout(self):
+        for hexdigest, fname in self._orphan_files():
+            if os.access(os.path.join(self.obj_directory, hexdigest), os.R_OK):
+                os.utime(fname, None)
+                # git checkout-index --index --force fname
+                self.git.checkout_index(fname, index=True, force=True)
+        self.ds_garbage_collector()
+
     def ds_pull(self):
         with self._dropshare_notes():
-            for sha, fname, stub in self.filtered_by_attributes(self._match):
-                if stub[0] != tools.hash_file(fname, self.hasher()):
-                    with open(fname, 'wb') as out_stream:
-                        if self.data_pull(out_stream, *stub):
-                            self.ds_append_note(sha, "pull", *stub)
-                            self.git.add(fname)
-                        else:
-                            tools.Console.write(f' \u2717 fails to download {fname}.\n')
+            for sha, fname, hexdigest in self.filtered_by_attributes(self._match):
+                if hexdigest != tools.hash_file(fname, self.hasher()):
+                    obj_hexdigest = os.path.join(self.obj_directory, hexdigest)
+                    if not os.access(obj_hexdigest, os.W_OK):
+                        with open(obj_hexdigest, 'wb') as out_stream:
+                            if self.data_pull(out_stream, hexdigest, fname):
+                                self.ds_append_note(sha, "pull", hexdigest, fname)
+                                # self.git.add(fname)
+                            else:
+                                tools.Console.info(f' \u2717 fails to download {fname}.')
+            self._checkout()
 
     def ds_push(self):
         with self._dropshare_notes():
-            for sha, fname, stub in self.filtered_by_attributes(self._match):
-                if not self.ds_has_note(sha, fname, *stub):
+            for sha, fname, hexdigest in self.filtered_by_attributes(self._match):
+                if not self.ds_has_note(sha, fname, hexdigest, fname):
                     with open(fname, 'rb') as in_stream:
-                        if not self.data_push(in_stream, *stub):
-                            tools.Console.write(f' \u2713 file {fname} already in store.\n')
-                    self.ds_append_note(sha, "push", *stub)
+                        if not self.data_push(in_stream, hexdigest, fname):
+                            tools.Console.info(f' \u2713 file {fname} already in store.')
+                    self.ds_append_note(sha, "push", hexdigest, fname)
 
     def ds_filter_clean(self):
-        """ Checking process. Warning: path merely informative. """
+        """run when a file is added to the index (checking):
+        - receives the "smudged" (tree) version of the file on stdin (stub)
+        - produces the "clean" (working repository) version on stdout.
+        - N.B. : the additional path argument serves only informative purpose."""
         out_stream, path = sys.stdout.buffer, self._filename
         with tools.scanner(sys.stdin.buffer) as in_stream:
             if in_stream.ds_is_stub():
-                tools.Console.write(f" * clean/cat {path}\n")
                 tools.cat_stream(in_stream, out_stream)
-                return
-            stub = tools.hash_file(path, self.hasher()), path
-            out_stream.write(tools.DS_WRITE(*stub))
+            else:
+                # We keep in cache objects not already available in store
+                hexdigest = tools.hash_file(path, self.hasher())
+                if not self.data_exists(hexdigest):
+                    obj_hexdigest = os.path.join(self.obj_directory, hexdigest)
+                    if not os.access(obj_hexdigest, os.W_OK) or os.path.getsize(obj_hexdigest) != os.path.getsize(path):
+                        shutil.copy(path, obj_hexdigest)
+                        os.chmod(obj_hexdigest, int('644', 8) & ~tools.umask())
+                out_stream.write(tools.DS_WRITE(hexdigest, path))
 
     def ds_filter_smudge(self):
         """ Checkout process. Warning: path merely informative. """
         out_stream, path = sys.stdout.buffer, self._filename
         with tools.scanner(sys.stdin.buffer) as in_stream:
-            stub = in_stream.ds_stub()
-            if stub is None or not self.data_exists(stub[0]):
-                tools.Console.write(f" * smudge/cat {path}\n")
+            try:
+                hexdigest, _ = in_stream.ds_stub()
+            except:
                 tools.cat_stream(in_stream, out_stream)
-                return
-            with tempfile.NamedTemporaryFile(mode='w+b', delete=False) as tmp_stream:
-                self.data_pull(tmp_stream, *stub, special='smudge')
-                tools.cat_stream(tmp_stream, out_stream)
+            else:
+                obj_hexdigest = os.path.join(self.obj_directory, hexdigest)
+                if os.access(obj_hexdigest, os.R_OK):
+                    with open(obj_hexdigest, 'rb') as obj_stream:
+                        tools.cat_stream(obj_stream, out_stream)
+                else:
+                    tools.cat_stream(in_stream, out_stream)
 
     def ds_init(self):
         if not self.store or self._force:
             self.set_credentials()
         if not self.store:
-            tools.Console.write('failed to access storage; token invalid?\n')
+            tools.Console.info('failed to access storage; token invalid?')
             sys.exit(1)
         else:
             self.ds_install()
@@ -106,19 +138,19 @@ class Dropshare(back.Backend):
     def ds_check(self, init=False):
         tag = self.git_config('dropshare.account', None)
         if not self.store or tag is None:
-            tools.Console.write(f' \u2717 dropshare not configured yet?...\n')
+            tools.Console.info(f' \u2717 dropshare not configured yet?...')
             sys.exit(1)
-        tools.Console.write(f' \u2713 found dropshare account = {tag}\n')
+        tools.Console.info(f' \u2713 found dropshare account = {tag}')
         missing = False
         for key in self.DS_KEYS:
             val = self.git_config('--global', f'dropshare.{tag}.{key}')
             if val is None:
                 missing = True
-                tools.Console.write(f' \u2717 dropshare.{key} is not set\n')
+                tools.Console.info(f' \u2717 dropshare.{key} is not set')
             else:
-                tools.Console.write(f' \u2713 dropshare.{key} = {val}\n')
+                tools.Console.info(f' \u2713 dropshare.{key} = {val}')
         if missing:
-            tools.Console.write(f' * call "git-ds init" first!\n')
+            tools.Console.info(f' * call "git-ds init" first!')
 
     def ds_track(self):
         self.ds_add_pattern([x.strip() for x in self._match])
@@ -126,31 +158,29 @@ class Dropshare(back.Backend):
     def ds_delta(self):
         changed, deleted, inserted = self.dbx.delta()
         if changed:
-            tools.Console.write(f' * {len(deleted)} deleted, {len(inserted)} updated.\n')
-        else:
-            tools.Console.write(f' * delta() returns no changes.\n')
+            tools.Console.info(f' * {len(deleted)} deleted, {len(inserted)} updated.')
 
     def ds_log(self):
         for fname in self._paths:
-            if not os.path.exists(fname):
-                tools.Console.write(f' \u2717 file {fname} does not exist.\n')
+            if not os.access(fname, os.R_OK):
+                tools.Console.info(f' \u2717 file {fname} does not exist.')
                 return
             entries = []
-            for tree in self.git.log("--pretty=format:%T", fname).split('\n'):
+            for tree in self.git.log("--pretty=format:%T", fname).split(''):
                 for _, sha in self.git_ls_tree('-r', tree, fname):
-                    for timestamp, direction, _, _, user in self.ds_manifest(sha, reverse=True):
+                    for timestamp, dir_, _, _, user in self.ds_manifest(sha, reverse=True):
                         dt_local = tools.local_date(timestamp)
                         dt_fmt = dt_local.strftime("%A %d %B %Y, %X")
-                        arrow = '\u2190' if direction == 'push' else '\u2192'
-                        entries.append((dt_local, sha[:6], dt_fmt, arrow, user))
+                        arrow = '\u2191' if dir_ == 'push' else '\u2193'
+                        entries.append((dt_local, sha[:6], dt_fmt, arrow, dir_, user))
             sentries = sorted(entries, key=operator.itemgetter(0), reverse=True)
-            for _, sha, date, arrow, user in sentries:
-                tools.Console.write(f" {arrow} ({sha}) {date} by {user}.\n")
+            for _, sha, date, arrow, direction, user in sentries:
+                tools.Console.info(f' {arrow} ({sha}) {date} - {direction}ed by {user}.')
 
     def ds_show(self):
         from subprocess import call
 
-        if os.path.exists(self._filename):
+        if os.access(self._filename, os.R_OK):
             call("xdg-open {}".format(self._filename), shell=True)
         else:
-            tools.Console.write(f' \u2717 dropshare: file not found "{self._filename}".\n')
+            tools.Console.info(f' \u2717 dropshare: file not found "{self._filename}".')

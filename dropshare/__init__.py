@@ -10,11 +10,19 @@
 import sys
 import argparse
 from contextlib import contextmanager
+from typing import Iterator
 
-from . import front
+from . import front, store, git
+
+__version__ = '0.1.1'
+__author__ = 'Philippe Audebaud <paudebau@gmail.com>'
+__copyright__ = 'Copyright 2018, Philippe Audebaud <paudebau@gmail.com>'
+__maintainer__ = 'Philippe Audebaud'
+__email__ = "paudebau@gmail.com"
+__license__ = 'Gnu Public License v3'
 
 class Parser:
-    def __init__(self):
+    def __init__(self) -> None:
         self.parser = argparse.ArgumentParser(prog='git-dropshare')
         self.parser.add_argument('-C', dest='_repository', metavar="REPOSITORY",
                                  action='store', default='.',
@@ -25,7 +33,7 @@ class Parser:
         self.parser.print_help()
 
     @contextmanager
-    def action(self, *args, **kwargs):
+    def action(self, *args, **kwargs) -> Iterator[argparse.ArgumentParser]:
             try:
                 yield self.subparser.add_parser(*args, **kwargs)
             finally:
@@ -73,3 +81,5 @@ def main():
         sys.exit(app.call())
     else:
         p.help()
+
+__all__ = ['main', 'store', 'git']

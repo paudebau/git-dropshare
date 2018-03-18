@@ -21,7 +21,7 @@ from . import tools
 try:
     import dropbox
 except ImportError:
-    tools.Console.write('fatal: "dropbox" module missing...\n')
+    tools.Console.error('fatal: "dropbox" module missing...')
     sys.exit(1)
 else:
     from dropbox.files import WriteMode
@@ -79,18 +79,18 @@ def apply_request(message):
     try:
         yield
     except HttpError as err:
-        tools.Console.write(f' \u2717 HTTP error {err}\n')
+        tools.Console.info(f' \u2717 HTTP error {err}')
     except ApiError as err:
         if err.error.is_path() and err.error.get_path().reason.is_insufficient_space():
-            tools.Console.write(' \u2717 insufficient space on account.\n')
+            tools.Console.info(' \u2717 insufficient space on account.')
         elif err.user_message_text:
-            tools.Console.write(f" \u2717 {err.user_message_text}\n")
+            tools.Console.info(f" \u2717 {err.user_message_text}\n")
         else:
-            tools.Console.write(f" \u2717 API error {err}\n")
+            tools.Console.info(f" \u2717 API error {err}\n")
         sys.exit(1)
     finally:
         stop = time.time()
-        tools.Console.write(f' \u2713 {message} took {stop - start:.3f} seconds\n')
+        tools.Console.info(f' \u2713 {message} took {stop - start:.3f} seconds')
 
 class HashTable(object):
     _ht = None
@@ -124,7 +124,7 @@ class HashTable(object):
                 self._ht = yaml.load(stream, Loader=yaml.Loader)
                 return
             if self._ht.get("version", "none") != HashTable._ht_ver:
-                tools.Console.write(f'ds database upgraded to {HashTable._ht_ver}\n')
+                tools.Console.info(f'ds database upgraded to {HashTable._ht_ver}')
                 self._ht["version"] = HashTable._ht_ver
                 self._ht['cursor'] = None
         self.save()
@@ -231,7 +231,7 @@ class Storage(HashTable):
 
     def get_state(self, cursor_val):
         if cursor_val is None:
-            tools.Console.write('dropshare initial synchronization!\n')
+            tools.Console.info('dropshare initial synchronization!')
             return self.db_client.files_list_folder(self.db_path, recursive=True, include_deleted=True)
         return self.db_client.files_list_folder_continue(cursor_val)
 
@@ -251,12 +251,12 @@ class Storage(HashTable):
                                 if path in self.hash_table['files']:
                                     del self.hash_table['files'][path]
                             elif isinstance(entry, FileMetadata):
-                                # tools.Console.write(f' * in {path}\n')
+                                # tools.Console.info(f' * in {path}')
                                 val = Storage.file_info(entry)
                                 inserted[path] = val
                                 self.hash_table['files'][path] = val
                 except dropbox.exceptions.ApiError as err:
-                    tools.Console.write(f'listing failed -- {str(err)}\n')
+                    tools.Console.error(f'listing failed -- {str(err)}')
                     return (False, 0, 0)
                 changes += items_count
                 cursor_val = state.cursor
