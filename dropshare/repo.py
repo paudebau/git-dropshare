@@ -11,7 +11,7 @@ import os
 import sys
 import re
 import time
-from typing import List, Optional, Union, Tuple, Iterable, Match, Dict
+from typing import List, Optional, Union, Tuple, Iterable, Dict
 
 from . import tools
 from .git import Git, GitCommandError, GitCmd, Sha
@@ -61,7 +61,7 @@ class Repo(object):
         except:
             return ('Anonymous', 'somebody@from.somewhere.else')
 
-    def git_config(self, *args, default : Optional[str] = None, **kwargs) -> Optional[str]:
+    def git_config(self, *args, default: Optional[str] = None, **kwargs) -> Optional[str]:
         try:
             return self.git.config(*args, **kwargs)
         except GitCommandError:
@@ -69,7 +69,7 @@ class Repo(object):
 
     # Dropshare specific
 
-    def ds_stub(self, sha : Sha) -> Optional[Tuple[str, str]]:
+    def ds_stub(self, sha: Sha) -> Optional[Tuple[str, str]]:
         return tools.ds_stub_string(self.git.show(sha))
 
     def ds_push_notes(self, remote='origin'):
@@ -101,7 +101,7 @@ class Repo(object):
     def ds_notes(self, *args) -> str:
         return self.git.notes('--ref=dropshare', *args)
 
-    def ds_append_note(self, sha : Sha, direction : str, hexdigest : str, fname : str):
+    def ds_append_note(self, sha: Sha, direction: str, hexdigest: str, fname: str):
         user, _ = self.git_identity()
         self.ds_notes("append", sha, '--message', f'{time.time()}\t{direction}\t{hexdigest}\t{fname}\t{user}')
 
@@ -118,9 +118,9 @@ class Repo(object):
                 lnotes.reverse()
             yield from [x.split('\t') for x in lnotes]
 
-    def ds_has_note(self, sha : Sha, fname : str, hexdigest : str, path : str) -> bool:
+    def ds_has_note(self, sha: Sha, fname: str, hexdigest: str, path: str) -> bool:
         manifest = self.ds_manifest(sha, reverse=True)
-        for _, direction, hexdigest_, path_, _ in manifest:
+        for _, direction, hexdigest_, _, _ in manifest:
             if direction == 'push' and hexdigest == hexdigest_:
                 return True
         return False
@@ -160,7 +160,7 @@ class Repo(object):
                 accounts[tag][key] = val
         return accounts
 
-    def ds_add_pattern(self, patterns : List[str], path : Optional[str] = None):
+    def ds_add_pattern(self, patterns: List[str], path: Optional[str] = None):
         pattern = patterns[0]
         if not pattern:
             tools.Console.info(f' \u2717 empty pattern {pattern}?')
@@ -183,7 +183,7 @@ class Repo(object):
                 attr_stream.write('\n'.join(attributes))
             tools.Console.info(f' \u2713 pattern {pattern} is now tracked.')
 
-    def _ds_patterns(self, paths : List[str]):
+    def _ds_patterns(self, paths: List[str]):
         for path in [os.path.join(self.toplevel_dir, x) for x in paths]:
             if os.path.exists(path):
                 for line in open(path, "r+t").readlines():
@@ -194,7 +194,7 @@ class Repo(object):
                             if regex:
                                 yield regex
 
-    def filtered_by_attributes(self, match : List[str] = []) -> Iterable[Tuple[str, str, str]]:
+    def filtered_by_attributes(self, match: List[str] = []) -> Iterable[Tuple[str, str, str]]:
         patterns = list(self._ds_patterns(Repo.ATTR_LOCS))
         selected = re.compile('|'.join(filter(None.__ne__, map(tools.fnmatch_normalize, match))))
         if not patterns:
@@ -213,11 +213,6 @@ class Repo(object):
 
     def ds_staging_objects(self):
         return set(os.listdir(self.obj_directory))
-
-    def ds_garbage_collector(self):
-        for fname in self.ds_staging_objects():
-            if self.data_exists(fname):
-                os.unlink(os.path.join(self.obj_directory, fname))
 
     def ds_referenced_objects(self, full=True) -> Union[Iterable[Tuple[str, str]], Iterable[str]]:
         for line in self.git.rev_list(objects=True, all=True).split():

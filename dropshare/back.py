@@ -11,10 +11,9 @@ import posixpath # for Dropbox API
 from contextlib import contextmanager
 from typing import List, Generator, Optional, Dict, IO
 
-from git.exc import GitCommandError
-
-from . import tools, repo
+from .git import GitCommandError
 from .store import DropboxContentHasher, Storage
+from . import tools, repo
 
 class BackendException(Exception):
     def __init__(self, message):
@@ -41,7 +40,7 @@ class Backend(repo.Repo):
             self.store = False
 
     DS_KEYS = ('root-path', 'token')
-    def get_credentials(self, tag : Optional[str] = None) -> List[str]:
+    def get_credentials(self, tag: Optional[str] = None) -> List[str]:
         try:
             if tag is None:
                 tag = self.git.config('dropshare.account')
@@ -84,18 +83,18 @@ class Backend(repo.Repo):
 
     @staticmethod
     @contextmanager
-    def data_location(hexdigest : str) -> Generator[str, None, None]:
+    def data_location(hexdigest: str) -> Generator[str, None, None]:
         try:
             yield posixpath.join(hexdigest[:2], hexdigest[2:4], hexdigest)
         finally:
             pass
 
-    def data_exists(self, hexdigest : str) -> bool:
+    def data_exists(self, hexdigest: str) -> bool:
         tools.Console.info(f' * exists {hexdigest}?')
         with Backend.data_location(hexdigest) as obj:
             return self.dbx.exists(obj)
 
-    def data_push(self, in_stream : IO[bytes], hexdigest : str, path : str, special=False) -> bool:
+    def data_push(self, in_stream: IO[bytes], hexdigest: str, path: str, special=False) -> bool:
         with Backend.data_location(hexdigest) as obj:
             if not self.dbx.exists(obj):
                 tools.Console.info(f' * push {path} filter={special}')
@@ -104,7 +103,7 @@ class Backend(repo.Repo):
                 raise BackendException(f' \u2717 fails to upload {path}.')
             return False
 
-    def data_pull(self, out_stream : IO[bytes], hexdigest : str, path : str, special=False) -> bool:
+    def data_pull(self, out_stream: IO[bytes], hexdigest: str, path: str, special=False) -> bool:
         with Backend.data_location(hexdigest) as obj:
             if self.dbx.exists(obj):
                 tools.Console.info(f' * pull {path} {hexdigest} filter={special}')

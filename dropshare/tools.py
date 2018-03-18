@@ -15,15 +15,16 @@ import io
 import socket
 from contextlib import contextmanager
 from datetime import datetime
+
+from abc import ABCMeta, abstractmethod
+from typing import Generator, Iterable, Optional, Tuple, Callable, IO
+
 import pytz
 import dateutil.tz
-from abc import ABCMeta, abstractmethod
-
-from typing import TypeVar, List, Generator, Iterable, Optional, Tuple, Callable, IO
 
 class Hasher(metaclass=ABCMeta):
     @abstractmethod
-    def update(self, x : bytes) -> None: pass
+    def update(self, bytes) -> None: pass
     @abstractmethod
     def hexdigest(self) -> str: pass
 
@@ -42,11 +43,11 @@ DS_READ = re.compile(b'^dropshare\n([^\n]+)\n([0-9A-Za-z]+)$', re.M)
 class Peeker:
     """Wrapper for stdin that implements proper peeking
 from https://stackoverflow.com/questions/14283025/python-3-reading-bytes-from-stdin-pipe-with-readahead """
-    def __init__(self, stream : IO[bytes]) -> None:
+    def __init__(self, stream: IO[bytes]) -> None:
         self.stream = stream
         self.buf = io.BytesIO()
 
-    def _append_to_buf(self, contents : bytes):
+    def _append_to_buf(self, contents: bytes):
         oldpos = self.buf.tell()
         self.buf.seek(0, io.SEEK_END)
         self.buf.write(contents)
@@ -58,7 +59,7 @@ from https://stackoverflow.com/questions/14283025/python-3-reading-bytes-from-st
         self.buf.seek(oldpos)
         return data
 
-    def peek(self, size : int) -> bytes:
+    def peek(self, size: int) -> bytes:
         buf = self._buffered()[:size]
         if len(buf) < size:
             contents = self.stream.read(size - len(buf))
@@ -66,7 +67,7 @@ from https://stackoverflow.com/questions/14283025/python-3-reading-bytes-from-st
             return self._buffered()
         return buf
 
-    def read(self, size : Optional[int] = None) -> bytes:
+    def read(self, size: Optional[int] = None) -> bytes:
         if size is None:
             contents = self.buf.read() + self.stream.read()
             self.buf = io.BytesIO()
@@ -77,7 +78,7 @@ from https://stackoverflow.com/questions/14283025/python-3-reading-bytes-from-st
             self.buf = io.BytesIO()
         return contents
 
-    def read_as_blocks(self, block_size : Optional[int] = None) -> Iterable[bytes]:
+    def read_as_blocks(self, block_size: Optional[int] = None) -> Iterable[bytes]:
         if block_size is None:
             block_size = BLOCK_SIZE
         return iter(lambda: self.read(block_size), b'')
@@ -103,7 +104,7 @@ from https://stackoverflow.com/questions/14283025/python-3-reading-bytes-from-st
         self.stream = None
 
 @contextmanager
-def scanner(stream : IO[bytes]) -> Generator[Peeker, None, None]:
+def scanner(stream: IO[bytes]) -> Generator[Peeker, None, None]:
     """returns a stdin reader with proper peek"""
     reader = Peeker(stream)
     try:
@@ -111,12 +112,12 @@ def scanner(stream : IO[bytes]) -> Generator[Peeker, None, None]:
     finally:
         reader.close()
 
-def ds_stub_string(text : str) -> Optional[Tuple[str, str]]:
+def ds_stub_string(text: str) -> Optional[Tuple[str, str]]:
     with io.BytesIO(text.strip().encode()) as in_stream:
         with scanner(in_stream) as stream:
             return stream.ds_stub()
 
-def ds_stub_file(path : str) -> Optional[Tuple[str, str]]:
+def ds_stub_file(path: str) -> Optional[Tuple[str, str]]:
     with open(path, 'rb') as in_stream:
         with scanner(in_stream) as stream:
             return stream.ds_stub()
@@ -126,18 +127,18 @@ def read_as_blocks(stream):
     return iter(lambda: stream.read(BLOCK_SIZE), b'')
 
 IDENTITY = lambda x: x # type: Callable[[bytes], bytes]
-def cat_stream(in_stream : IO[bytes], out_stream : IO[bytes], action : Callable[[bytes], bytes] = IDENTITY):
+def cat_stream(in_stream: IO[bytes], out_stream: IO[bytes], action: Callable[[bytes], bytes] = IDENTITY):
     for block in read_as_blocks(in_stream):
         out_stream.write(action(block))
 
-def hash_cat_stream(in_stream : IO[bytes], out_stream : IO[bytes], hash_function : Hasher) -> str:
+def hash_cat_stream(in_stream: IO[bytes], out_stream: IO[bytes], hash_function: Hasher) -> str:
     for block in read_as_blocks(in_stream):
         hash_function.update(block)
         out_stream.write(block)
     out_stream.seek(0)
     return hash_function.hexdigest()
 
-def hash_file(filename : str, hash_function : Hasher) -> str:
+def hash_file(filename: str, hash_function: Hasher) -> str:
     if not os.path.exists(filename):
         return ''
     with open(filename, 'rb') as in_stream:
@@ -147,7 +148,7 @@ def hash_file(filename : str, hash_function : Hasher) -> str:
 
 # int(self.date.replace(tzinfo=datetime.timezone.utc).timestamp())
 # DT_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
-def local_date(timestamp : str): # fixme
+def local_date(timestamp: str): # fixme
     utc_dt = datetime.fromtimestamp(float(timestamp), tz=pytz.timezone("UTC"))
     return utc_dt.astimezone(dateutil.tz.tzlocal())
 
@@ -180,7 +181,7 @@ TRAILING_DOUBLE_STAR_REPL = r'/.+'
 # no / matches basename
 NO_SLASH_RE = r'(.*/)?'
 
-def path_matches_pattern(path : str, pattern : str) -> bool:
+def path_matches_pattern(path: str, pattern: str) -> bool:
     """Return True if path matches the LFS filter pattern.
 
     See gitignore and gitattributes documentation for more on this.
@@ -208,7 +209,7 @@ def path_matches_pattern(path : str, pattern : str) -> bool:
         regex = NO_SLASH_RE + regex
     return bool(re.match(regex, path))
 
-def fnmatch_normalize(pattern : str): # fixme -> Optional[]:
+def fnmatch_normalize(pattern: str): # fixme -> Optional[]:
     if pattern.endswith('/'):  # directory pattern
         return None
     regex = fnmatch.translate(pattern)

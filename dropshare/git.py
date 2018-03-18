@@ -7,19 +7,20 @@
 # You should have received a copy of the license with the software.
 # If not, see http://www.gnu.org/licenses/gpl-3.0.html
 
-#import git
+from abc import ABCMeta, abstractmethod
+from typing import Optional, Dict
+
 from git import Git
 from git.exc import GitCommandError
-from typing import Optional, Dict
-from abc import ABCMeta, abstractmethod
 
-__all__ = ['Sha', 'GitCmd', 'GitCommandError']
+
+__all__ = ['Sha', 'GitCmd', 'Git', 'GitCommandError']
 
 Sha = str
 
 class GitCmd(metaclass=ABCMeta):
     @abstractmethod
-    def config(self, *str, **kwargs : Dict[str, str]) -> Optional[str]: pass
+    def config(self, *str, **kwargs: Dict[str, str]) -> Optional[str]: pass
     @abstractmethod
     def notes(self, *str) -> str: pass
     @abstractmethod
@@ -29,7 +30,7 @@ class GitCmd(metaclass=ABCMeta):
     @abstractmethod
     def rev_parse(self, **str) -> str: pass
     @abstractmethod
-    def get_object_header(self, sha : Sha) -> str: pass
+    def get_object_header(self, sha: Sha) -> str: pass
     @abstractmethod
     def ls_files(self, str) -> str: pass
     @abstractmethod

@@ -59,13 +59,18 @@ class Dropshare(back.Backend):
             if stub:
                 yield stub
 
+    def _garbage_collector(self):
+        for fname in self.ds_staging_objects():
+            if self.data_exists(fname):
+                os.unlink(os.path.join(self.obj_directory, fname))
+
     def _checkout(self):
         for hexdigest, fname in self._orphan_files():
             if os.access(os.path.join(self.obj_directory, hexdigest), os.R_OK):
                 os.utime(fname, None)
                 # git checkout-index --index --force fname
                 self.git.checkout_index(fname, index=True, force=True)
-        self.ds_garbage_collector()
+        self._garbage_collector()
 
     def ds_pull(self):
         with self._dropshare_notes():
@@ -94,7 +99,7 @@ class Dropshare(back.Backend):
         """run when a file is added to the index (checking):
         - receives the "smudged" (tree) version of the file on stdin (stub)
         - produces the "clean" (working repository) version on stdout.
-        - N.B. : the additional path argument serves only informative purpose."""
+        - N.B.: the additional path argument serves only informative purpose."""
         out_stream, path = sys.stdout.buffer, self._filename
         with tools.scanner(sys.stdin.buffer) as in_stream:
             if in_stream.ds_is_stub():
