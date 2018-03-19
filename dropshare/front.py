@@ -20,7 +20,7 @@ class Dropshare(back.Backend):
 
     store = False
     # calls args
-    _force = None     # type: Optional[bool] # init
+    _force = False    # init
     _match = []       # type: List[str] # pull/push
     _remote = None    # type: Optional[str] # fetch
     _filename = None  # type: Optional[str] # log
@@ -53,24 +53,16 @@ class Dropshare(back.Backend):
         with self._dropshare_notes():
             self.ds_pull_notes(self._remote)
 
-    def _orphan_files(self):
-        for path in self.git.ls_files(self.toplevel_dir).split('\n'):
-            stub = tools.ds_stub_file(path)
-            if stub:
-                yield stub
-
-    def _garbage_collector(self):
+    def _checkout(self):
+        # hack to trigger smudge filter on remaining stubs
+        for hexdigest, fname in self.ds_orphan_files():
+            if os.access(os.path.join(self.obj_directory, hexdigest), os.R_OK):
+                os.utime(fname, None)
+                self.git.checkout_index(fname, index=True, force=True)
+        # remove objects writtent by clean filter
         for fname in self.ds_staging_objects():
             if self.data_exists(fname):
                 os.unlink(os.path.join(self.obj_directory, fname))
-
-    def _checkout(self):
-        for hexdigest, fname in self._orphan_files():
-            if os.access(os.path.join(self.obj_directory, hexdigest), os.R_OK):
-                os.utime(fname, None)
-                # git checkout-index --index --force fname
-                self.git.checkout_index(fname, index=True, force=True)
-        self._garbage_collector()
 
     def ds_pull(self):
         with self._dropshare_notes():
@@ -109,7 +101,8 @@ class Dropshare(back.Backend):
                 hexdigest = tools.hash_file(path, self.hasher())
                 if not self.data_exists(hexdigest):
                     obj_hexdigest = os.path.join(self.obj_directory, hexdigest)
-                    if not os.access(obj_hexdigest, os.W_OK) or os.path.getsize(obj_hexdigest) != os.path.getsize(path):
+                    if not os.access(obj_hexdigest, os.W_OK) or \
+                       os.path.getsize(obj_hexdigest) != os.path.getsize(path):
                         shutil.copy(path, obj_hexdigest)
                         os.chmod(obj_hexdigest, int('644', 8) & ~tools.umask())
                 out_stream.write(tools.DS_WRITE(hexdigest, path))
@@ -143,19 +136,19 @@ class Dropshare(back.Backend):
     def ds_check(self, init=False):
         tag = self.git_config('dropshare.account', None)
         if not self.store or tag is None:
-            tools.Console.info(f' \u2717 dropshare not configured yet?...')
+            tools.Console.write(f' \u2717 dropshare not configured yet?...')
             sys.exit(1)
-        tools.Console.info(f' \u2713 found dropshare account = {tag}')
+        tools.Console.write(f' \u2713 found dropshare account = {tag}')
         missing = False
         for key in self.DS_KEYS:
             val = self.git_config('--global', f'dropshare.{tag}.{key}')
             if val is None:
                 missing = True
-                tools.Console.info(f' \u2717 dropshare.{key} is not set')
+                tools.Console.write(f' \u2717 dropshare.{tag}.{key} is not set')
             else:
-                tools.Console.info(f' \u2713 dropshare.{key} = {val}')
+                tools.Console.write(f' \u2713 dropshare.{tag}.{key} = {val}')
         if missing:
-            tools.Console.info(f' * call "git-ds init" first!')
+            tools.Console.write(f' * call "git-ds init" first!')
 
     def ds_track(self):
         self.ds_add_pattern([x.strip() for x in self._match])
@@ -168,10 +161,10 @@ class Dropshare(back.Backend):
     def ds_log(self):
         for fname in self._paths:
             if not os.access(fname, os.R_OK):
-                tools.Console.info(f' \u2717 file {fname} does not exist.')
+                tools.Console.write(f' \u2717 file {fname} does not exist.')
                 return
             entries = []
-            for tree in self.git.log("--pretty=format:%T", fname).split(''):
+            for tree in self.git.log("--pretty=format:%T", fname).split('\n'):
                 for _, sha in self.git_ls_tree('-r', tree, fname):
                     for timestamp, dir_, _, _, user in self.ds_manifest(sha, reverse=True):
                         dt_local = tools.local_date(timestamp)
@@ -180,7 +173,7 @@ class Dropshare(back.Backend):
                         entries.append((dt_local, sha[:6], dt_fmt, arrow, dir_, user))
             sentries = sorted(entries, key=operator.itemgetter(0), reverse=True)
             for _, sha, date, arrow, direction, user in sentries:
-                tools.Console.info(f' {arrow} ({sha}) {date} - {direction}ed by {user}.')
+                tools.Console.write(f' {arrow} ({sha}) {date} - {direction}ed by {user}.')
 
     def ds_show(self):
         from subprocess import call
@@ -188,4 +181,4 @@ class Dropshare(back.Backend):
         if os.access(self._filename, os.R_OK):
             call("xdg-open {}".format(self._filename), shell=True)
         else:
-            tools.Console.info(f' \u2717 dropshare: file not found "{self._filename}".')
+            tools.Console.write(f' \u2717 dropshare: file not found "{self._filename}".')

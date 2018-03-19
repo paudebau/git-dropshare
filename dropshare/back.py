@@ -9,7 +9,7 @@
 
 import posixpath # for Dropbox API
 from contextlib import contextmanager
-from typing import List, Generator, Optional, Dict, IO
+from typing import Tuple, Generator, Optional, Dict, IO
 
 from .git import GitCommandError
 from .store import DropboxContentHasher, Storage
@@ -28,58 +28,57 @@ class Backend(repo.Repo):
 
     def __init__(self):
         super().__init__()
-        root_path, token = self.get_credentials()
-        if not root_path:
-            root_path = ''
         self.hasher = DropboxContentHasher
         if tools.reachable():
-            self.dbx = Storage(self.git_directory, root_path, token)
-            self.store = self.dbx is not None
+            self._connect_dropbox()
         else:
             tools.Console.info('Unable to connect Dropbox servers.')
             self.store = False
 
     DS_KEYS = ('root-path', 'token')
-    def get_credentials(self, tag: Optional[str] = None) -> List[str]:
+    def _connect_dropbox(self):
+        tag, root_path, token = None, '', None
         try:
-            if tag is None:
-                tag = self.git.config('dropshare.account')
-            return list(map(lambda key: self.git.config(f'dropshare.{tag}.{key}'), Backend.DS_KEYS))
+            tag = self.git.config('dropshare.account')
+            root_path = self.git.config(f'dropshare.{tag}.root-path')
+            token = self.git.config(f'dropshare.{tag}.token')
         except GitCommandError:
-            self.set_credentials()
-            return []
+            root_path, token = self.set_credentials()
+        finally:
+            self.dbx = Storage(self.git_directory, root_path, token)
+            self.store = self.dbx is not None
 
-    def set_credentials(self):
+    def set_credentials(self) -> Tuple[str, str]:
         data = self.list_credentials()
-        selected, accounts = None, data.keys()
-        tools.Console.write('Choose an account (or 0 to enter a new one.\n')
+        selected, accounts, tag = None, data.keys(), None
         choices = dict((str(choice), tag) for choice, tag in enumerate(accounts, 1))
-        tag, dic = None, dict()
+
+        tools.Console.write('Choose an account (or 0 to enter a new one.\n')
         for choice, tag in choices.items():
             tools.Console.write(f'  ({choice}) {tag}: {data[tag]["description"]}\n')
         tools.Console.write(f'  (0) NEW ACCOUNT')
+
         while selected != '0' and selected not in choices.keys():
             selected = input("Enter your choice here: ")
         if selected in choices.keys():
-            dic = choices[selected]
-        else:
-            tools.Console.write('\n = Dropbox Share Credentials:\n')
-            while True:
-                tag = input(' * choose a FRESH account name: ').strip()
-                if tag and tag not in accounts:
-                    break
-            root_path = input(' * Share base path relative to Dropbox root: ')
-            token = input(" * Dropbox access token: ")
-            description = input(' * Short description: ')
-            self.git.config('--global', f'dropshare.{tag}.description', description)
-            self.git.config('--global', f'dropshare.{tag}.root-path', root_path)
-            self.git.config('--global', f'dropshare.{tag}.token', token)
-            dic = {'description': description, 'token': token, 'root_path': root_path}
+            tag = choices[selected]
+            dic = data[tag]
             self.git.config('dropshare.account', tag)
+            return dic['root-path'], dic['token']
 
+        tools.Console.write('\n = Dropbox Share Credentials:\n')
+        while True:
+            tag = input(' * choose a FRESH account name: ').strip()
+            if tag and tag not in accounts:
+                break
+        root_path = input(' * Share base path relative to Dropbox root: ')
+        token = input(" * Dropbox access token: ")
+        description = input(' * Short description: ')
+        self.git.config('--global', f'dropshare.{tag}.description', description)
+        self.git.config('--global', f'dropshare.{tag}.root-path', root_path)
+        self.git.config('--global', f'dropshare.{tag}.token', token)
         self.git.config('dropshare.account', tag)
-        self.dbx = Storage(self.git_directory, dic['root_path'], dic['token'])
-        self.store = self.dbx is not None
+        return root_path, token
 
     @staticmethod
     @contextmanager
@@ -90,7 +89,7 @@ class Backend(repo.Repo):
             pass
 
     def data_exists(self, hexdigest: str) -> bool:
-        tools.Console.info(f' * exists {hexdigest}?')
+        # tools.Console.info(f' * exists {hexdigest}?')
         with Backend.data_location(hexdigest) as obj:
             return self.dbx.exists(obj)
 

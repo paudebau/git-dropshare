@@ -29,11 +29,14 @@ class Hasher(metaclass=ABCMeta):
     def hexdigest(self) -> str: pass
 
 class Console:
-    info = lambda msg: sys.stderr.write(msg + '\n')
-    warning = lambda msg: sys.stderr.write(msg + '\n')
-    error = lambda msg: sys.stderr.write(msg + '\n')
-    debug = lambda msg: sys.stderr.write(msg + '\n')
-    write = lambda msg: sys.stderr.write(msg)
+    nl = '\n' if sys.stdin.isatty() else ''
+
+    info = lambda msg: sys.stderr.write(msg + Console.nl)
+    warning = lambda msg: sys.stderr.write(msg + Console.nl)
+    error = lambda msg: sys.stderr.write(msg + Console.nl)
+    debug = lambda msg: sys.stderr.write(msg + Console.nl)
+
+    write = lambda msg: sys.stderr.write(msg  + Console.nl)
     flush = lambda: sys.stderr.flush()
 
 DS_HEAD = b'dropshare\n'

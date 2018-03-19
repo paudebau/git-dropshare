@@ -148,7 +148,7 @@ class Repo(object):
     DS_RE = re.compile(r'^dropshare\.([^.]+).([^.]+)=(.*)$')
     def list_credentials(self) -> Dict[str, Dict[str, str]]:
         accounts = dict() # type: Dict[str, Dict[str, str]]
-        for line in self.git.config('--global', '--list').split(''):
+        for line in self.git.config('--global', '--list').split('\n'):
             match = Repo.DS_RE.match(line)
             if match:
                 tag = match.group(1).strip()
@@ -214,8 +214,14 @@ class Repo(object):
     def ds_staging_objects(self):
         return set(os.listdir(self.obj_directory))
 
+    def ds_orphan_files(self) -> Iterable[Tuple[str, str]]:
+        for path in self.git.ls_files(self.toplevel_dir).split('\n'):
+            stub = tools.ds_stub_file(path)
+            if stub:
+                yield stub
+
     def ds_referenced_objects(self, full=True) -> Union[Iterable[Tuple[str, str]], Iterable[str]]:
-        for line in self.git.rev_list(objects=True, all=True).split():
+        for line in self.git.rev_list(objects=True, all=True).split('\n'):
             try:
                 sha = line[:40]
                 _, obj_type, size = self.git.get_object_header(sha)

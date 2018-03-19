@@ -8,6 +8,8 @@
 # You should have received a copy of the license which the software.
 # If not, see http://www.gnu.org/licenses/gpl-3.0.html
 
+# TODO: improve with https://github.com/pypa/sampleproject
+
 from setuptools import setup, find_packages
 
 import dropshare
@@ -18,7 +20,6 @@ setup(name='git-dropshare',
       version=dropshare.__version__,
       license=dropshare.__license__,
       author=dropshare.__author__,
-      # author_email=f'{dropshare.__author__} <{dropshare.__email__}>',
       author_email=dropshare.__email__,
       packages=find_packages(),
       include_package_data=True,

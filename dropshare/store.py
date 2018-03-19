@@ -13,6 +13,7 @@ import posixpath # for Dropbox API
 import time
 import hashlib
 from contextlib import contextmanager
+from typing import List, Optional, Generator, IO, Tuple, Iterable, Dict
 
 import yaml # fixme json!
 
@@ -38,7 +39,7 @@ class DropboxContentHasher(object):
         self._block_pos = 0
         self.digest_size = self._overall_hasher.digest_size
 
-    def update(self, new_data):
+    def update(self, new_data: bytes):
         # assert isinstance(new_data, bytes), "Expecting a byte string, got {type(new_data)}"
         new_data_pos = 0
         while new_data_pos < len(new_data):
@@ -60,7 +61,7 @@ class DropboxContentHasher(object):
         self._overall_hasher = None  # Make sure we can't use this object anymore.
         return hasher
 
-    def hexdigest(self):
+    def hexdigest(self) -> str:
         return self._finish().hexdigest()
 
     # def digest(self):
@@ -74,7 +75,7 @@ class DropboxContentHasher(object):
     #     return c
 
 @contextmanager
-def apply_request(message):
+def apply_request(message: str):
     start = time.time()
     try:
         yield
@@ -97,7 +98,7 @@ class HashTable(object):
     _ht_ver = "1"
     _ht_loc = None
 
-    def __init__(self, gitdir):
+    def __init__(self, gitdir: str):
         self._ht = None
         self._ht_loc = os.path.join(gitdir, 'dropshare', 'hash_table.yml')
         self.load()
@@ -137,7 +138,7 @@ class Storage(HashTable):
 
     mode = WriteMode.add
 
-    def __init__(self, gitdir, root_path='', token=None):
+    def __init__(self, gitdir, root_path='', token: Optional[str] = None):
         super().__init__(gitdir)
         self.db_client = None
         self.db_path = '/' + posixpath.normpath(root_path.strip('/'))
@@ -180,41 +181,41 @@ class Storage(HashTable):
     # has_explicit_shared_members=None
 
     @contextmanager
-    def local_path(self, path):
+    def local_path(self, path: str) -> Generator[str, None, None]:
         try:
             yield path[len(self.db_path)+1:]
         finally:
             pass
 
     @contextmanager
-    def remote_path(self, path):
+    def remote_path(self, path: str) -> Generator[str, None, None]:
         try:
             yield posixpath.normpath(posixpath.join(self.db_path, path.strip('/')))
         finally:
             pass
 
-    def download(self, out_stream, obj, path):
+    def download(self, out_stream: IO[bytes], obj: str, path: str):
         with apply_request(f"dn {path} from {obj}"):
             with self.remote_path(obj) as remote:
                 meta = self.db_client.files_download_to_file(out_stream.name, remote)
                 out_stream.seek(0)
                 return Storage.file_info(meta) if meta else None
 
-    def upload(self, in_stream, obj, path):
+    def upload(self, in_stream: IO[bytes], obj: str, path: str):
         with apply_request(f"up {path} as {obj}"):
             data = in_stream.read() # fixme gerer barriere 150Mo
             with self.remote_path(obj) as remote:
                 meta = self.db_client.files_upload(data, remote, mode=Storage.mode)
                 return Storage.file_info(meta) if meta else None
 
-    def infos(self, obj):
+    def infos(self, obj: str):
         with self.remote_path(obj) as remote:
             return self.db_client.files_get_metadata(remote)
 
-    def exists(self, obj):
+    def exists(self, obj: str) -> bool:
         return obj in self.hash_table['files']
 
-    def get_id_info(self, account_id):
+    def get_id_info(self, account_id: str):
         if "sharing" not in self.hash_table:
             self.hash_table["sharing"] = dict()
         if account_id in self.hash_table["sharing"]:
@@ -229,7 +230,7 @@ class Storage(HashTable):
             self.hash_table["dropbox_id"] = account.account_id
             return self.get_id_info(account.account_id)
 
-    def get_state(self, cursor_val):
+    def get_state(self, cursor_val: str):
         if cursor_val is None:
             tools.Console.info('dropshare initial synchronization!')
             return self.db_client.files_list_folder(self.db_path, recursive=True, include_deleted=True)
