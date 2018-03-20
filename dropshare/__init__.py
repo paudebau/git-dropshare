@@ -14,7 +14,7 @@ from typing import Iterator
 
 from . import front, store, git
 
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 __author__ = 'Philippe Audebaud <paudebau@gmail.com>'
 __copyright__ = 'Copyright 2018, Philippe Audebaud <paudebau@gmail.com>'
 __maintainer__ = 'Philippe Audebaud'
