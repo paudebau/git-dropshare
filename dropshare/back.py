@@ -53,7 +53,7 @@ class Backend(repo.Repo):
         selected, accounts, tag = None, data.keys(), None
         choices = dict((str(choice), tag) for choice, tag in enumerate(accounts, 1))
 
-        tools.Console.write('Choose an account (or 0 to enter a new one.\n')
+        tools.Console.write('Choose an account (or 0 to CREATE a fresh one).\n')
         for choice, tag in choices.items():
             tools.Console.write(f'  ({choice}) {tag}: {data[tag]["description"]}\n')
         tools.Console.write(f'  (0) NEW ACCOUNT')
@@ -71,9 +71,9 @@ class Backend(repo.Repo):
             tag = input(' * choose a FRESH account name: ').strip()
             if tag and tag not in accounts:
                 break
+        description = input(' * Short description: ')
         root_path = input(' * Share base path relative to Dropbox root: ')
         token = input(" * Dropbox access token: ")
-        description = input(' * Short description: ')
         self.git.config('--global', f'dropshare.{tag}.description', description)
         self.git.config('--global', f'dropshare.{tag}.root-path', root_path)
         self.git.config('--global', f'dropshare.{tag}.token', token)
