@@ -28,6 +28,10 @@ class Hasher(metaclass=ABCMeta):
     @abstractmethod
     def hexdigest(self) -> str: pass
 
+def console_write(msg, cr=True):
+    nl = '\n' if sys.stdin.isatty() and cr else ''
+    sys.stderr.write(msg + nl)
+
 class Console:
     nl = '\n' if sys.stdin.isatty() else ''
 
@@ -35,9 +39,8 @@ class Console:
     warning = lambda msg: sys.stderr.write(msg + Console.nl)
     error = lambda msg: sys.stderr.write(msg + Console.nl)
     debug = lambda msg: sys.stderr.write(msg + Console.nl)
-
-    write = lambda msg: sys.stderr.write(msg  + Console.nl)
     flush = lambda: sys.stderr.flush()
+    write = console_write
 
 DS_HEAD = b'dropshare\n'
 DS_WRITE = lambda hexdigest, path: f'dropshare\n{path}\n{hexdigest}\n'.encode()
