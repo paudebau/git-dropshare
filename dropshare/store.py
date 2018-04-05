@@ -195,14 +195,14 @@ class Storage(HashTable):
             pass
 
     def download(self, out_stream: IO[bytes], obj: str, path: str):
-        with apply_request(f"dn {path} from {obj}"):
+        with apply_request(f"dn {obj}"):
             with self.remote_path(obj) as remote:
                 meta = self.db_client.files_download_to_file(out_stream.name, remote)
                 out_stream.seek(0)
                 return Storage.file_info(meta) if meta else None
 
     def upload(self, in_stream: IO[bytes], obj: str, path: str):
-        with apply_request(f"up {path} as {obj}"):
+        with apply_request(f"up {obj}"):
             data = in_stream.read() # fixme gerer barriere 150Mo
             with self.remote_path(obj) as remote:
                 meta = self.db_client.files_upload(data, remote, mode=Storage.mode)

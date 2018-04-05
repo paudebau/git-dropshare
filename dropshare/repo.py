@@ -14,7 +14,8 @@ import time
 from typing import List, Optional, Union, Tuple, Iterable, Dict
 
 from . import tools
-from .git import Git, GitCommandError, GitCmd, Sha
+from .git import GitRepo, GitCli, GitCommandError
+from .git import GitCmd, Sha # for type checking
 
 class Repo(object):
 
@@ -27,6 +28,7 @@ class Repo(object):
     toplevel_dir = '.'
 
     git = None # type: Optional[GitCmd]
+    git_repo = None # type: Optional[GitRepo]
     git_directory = '.git' # may be redirected via gitdir
 
     def __new__(cls):
@@ -42,7 +44,8 @@ class Repo(object):
         if not os.path.exists(os.path.join(self.toplevel_dir, '.git')):
             tools.Console.info(' \u2717 git: no repository found; run git init?')
             sys.exit(1)
-        self.git = Git(self.toplevel_dir)
+        self.git = GitCli(self.toplevel_dir)
+        self.git_repo = GitRepo(self.toplevel_dir)
         self.git_directory = self.git.rev_parse(git_dir=True)
         self.obj_directory = os.path.join(self.git_directory, 'dropshare', 'objects')
         os.makedirs(self.obj_directory, exist_ok=True)
@@ -205,9 +208,13 @@ class Repo(object):
         for fname, sha in items:
             if pat_re.match(fname):
                 if not match or selected.match(fname):
-                    stub = self.ds_stub(sha)
-                    if stub:
-                        yield (sha, fname, stub[0])
+                    try:
+                        stub = self.ds_stub(sha)
+                    except UnicodeEncodeError:
+                        pass
+                    else:
+                        if stub:
+                            yield (sha, fname, stub[0])
 
     # Dropshare staging management
 

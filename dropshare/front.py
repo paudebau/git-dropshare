@@ -63,6 +63,8 @@ class Dropshare(back.Backend):
         for fname in self.ds_staging_objects():
             if self.data_exists(fname):
                 os.unlink(os.path.join(self.obj_directory, fname))
+        # tools.Console.write(' * check repository status: ', cr=False)
+        # tools.Console.write('dirty' if self.git_repo.is_dirty() else 'OK')
 
     def ds_pull(self):
         with self._dropshare_notes():
@@ -77,6 +79,7 @@ class Dropshare(back.Backend):
                             else:
                                 tools.Console.info(f' \u2717 fails to download {fname}.')
             self._checkout()
+            self.git.status()
 
     def ds_push(self):
         with self._dropshare_notes():

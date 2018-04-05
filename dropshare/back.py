@@ -53,9 +53,9 @@ class Backend(repo.Repo):
         selected, accounts, tag = None, data.keys(), None
         choices = dict((str(choice), tag) for choice, tag in enumerate(accounts, 1))
 
-        tools.Console.write('Choose an account (or 0 to CREATE a fresh one).\n')
+        tools.Console.write('Choose an account (or 0 to CREATE a fresh one).')
         for choice, tag in choices.items():
-            tools.Console.write(f'  ({choice}) {tag}: {data[tag]["description"]}\n')
+            tools.Console.write(f'  ({choice}) {tag}: {data[tag]["description"]}')
         tools.Console.write(f'  (0) NEW ACCOUNT')
 
         while selected != '0' and selected not in choices.keys():
@@ -66,7 +66,7 @@ class Backend(repo.Repo):
             self.git.config('dropshare.account', tag)
             return dic['root-path'], dic['token']
 
-        tools.Console.write('\n = Dropbox Share Credentials:\n')
+        tools.Console.write('\n = Dropbox Share Credentials:')
         while True:
             tag = input(' * choose a FRESH account name: ').strip()
             if tag and tag not in accounts:
@@ -105,7 +105,7 @@ class Backend(repo.Repo):
     def data_pull(self, out_stream: IO[bytes], hexdigest: str, path: str, special=False) -> bool:
         with Backend.data_location(hexdigest) as obj:
             if self.dbx.exists(obj):
-                tools.Console.info(f' * pull {path} {hexdigest} filter={special}')
+                tools.Console.info(f' * pull {path} filter={special}')
                 if self.dbx.download(out_stream, obj, path):
                     return True
                 raise BackendException(f' \u2717 fails to download {path}.')

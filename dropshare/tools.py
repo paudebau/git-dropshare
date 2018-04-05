@@ -124,9 +124,12 @@ def ds_stub_string(text: str) -> Optional[Tuple[str, str]]:
             return stream.ds_stub()
 
 def ds_stub_file(path: str) -> Optional[Tuple[str, str]]:
-    with open(path, 'rb') as in_stream:
-        with scanner(in_stream) as stream:
-            return stream.ds_stub()
+    try:
+        with open(path, 'rb') as in_stream:
+            with scanner(in_stream) as stream:
+                return stream.ds_stub()
+    except FileNotFoundError:
+        return None
 
 BLOCK_SIZE = 128*1024
 def read_as_blocks(stream):
